@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+  <!--send robot urdf to the parameter server for others to use to use -->
+  <param name="robot_description" command="$(find xacro)/xacro '$(find noob_bot)/urdf/noob_bot.xacro'"/>
+
+  <!-- Send joint values, fake ones based on ur urdf definition -->
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+    <param name="use_gui" value="false"/>
+  </node>
+
+  <!-- Send robot states to tf (to handle transformations between links), based on ur urdf definition -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen"/>
+
+</launch>
+

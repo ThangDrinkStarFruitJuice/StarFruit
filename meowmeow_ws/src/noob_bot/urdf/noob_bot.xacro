@@ -1,0 +1,218 @@
+<?xml version="1.0"?>
+
+<robot name="noob_bot" xmlns:xacro="http://wiki.ros.org/xacro">
+
+    <!-- Include the plugins -->
+    <xacro:include filename="$(find noob_bot)/urdf/noob_bot.gazebo"/>
+
+    <!-- Define wheel radius, length and mass. Also PI  -->
+    <xacro:property name="wheel_r" value="0.111"/>
+    <xacro:property name="wheel_h" value="0.075"/>
+    <xacro:property name="wheel_m" value="1.0"/>
+    <xacro:property name="M_PI" value="3.1415926535897931"/>
+
+    <!-- Define robot base (body) mass, length, width and height -->
+    <xacro:property name="base_m" value="15.0"/>
+    <xacro:property name="base_x" value="0.5"/>
+    <xacro:property name="base_y" value="0.3"/>
+    <xacro:property name="base_z" value="0.15"/>
+
+    <!-- Define camerea size -->
+    <xacro:property name="camera_size" value="0.05"/>
+
+    <!-- Define Offsets -->
+    <!-- 
+        **********************
+        *                    *
+        *                    *
+        *                    *
+        **********************
+                | offset_x |
+            center         joint 
+                            will
+                              be
+                            here
+    -->
+    <xacro:property name="wheel_offset_x" value="0.14999"/>
+    <!-- offset y = base_y/2 + wheel_h/2 + slight compensation-->
+    <xacro:property name="wheel_offset_y" value="0.1900"/>
+    <xacro:property name="wheel_offset_z" value="0.0"/>
+
+    <!-- Define formula for moment of inertia of cylinder, can find on internet -->
+    <xacro:macro name="inertia_cyl" params="m r h">
+        <inertia ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0"
+                 iyy="${m*r*r/2}" iyz="0"
+                 izz="${m*(3*r*r+h*h)/12}"/>
+    </xacro:macro>
+    
+    <!-- Moment of inertia of box -->
+    <xacro:macro name="inertia_box" params="m x y z">
+        <inertia ixx="${(y*y+z*z)*m/12}" ixy="0" ixz="0"
+                 iyy="${(x*x+z*z)*m/12}" iyz="0"
+                 izz="${(x*x+y*y)*m/12}"/>
+    </xacro:macro>
+
+    <!-- Number of joints = Number of links - 1 -->
+    <link name="base_footprint">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.001 0.001 0.001"/> 
+            </geometry>
+        </visual>
+    </link>
+
+    <joint name="base_footprint_joint" type="fixed">
+        <origin xyz="0 0 ${wheel_r}" rpy="0 0 0" /> 
+        <parent link="base_footprint"/>
+        <child link="base_link"/>
+    </joint>
+        
+    <!-- Every important link should have an inertial defined, 
+    this decide how well the bot moves in simulation-->
+    <!--3 main part of a link, 
+        Inertial
+        Visual 
+        Collision -->
+    <link name="base_link">
+        <inertial>
+            <mass value="15.0"/>
+            <origin xyz="0 0 0"/>
+            <inertia ixx="0.140625" ixy="0" ixz="0"
+                     iyy="0.340625" iyz="0"
+                     izz="0.425"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.5 0.3 0.15"/>
+            </geometry>
+            <material name="Red">
+                <color rgba="0.8 0 0 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.499 0.299 0.1499"/>
+            </geometry>
+        </collision>
+    </link>
+    <!-- Define Gazebo color -->
+    <!-- The other material tag in Visual is only color in rviz -->
+    <gazebo reference="base_link">
+        <material value="Gazebo/Red"/>
+    </gazebo>
+
+    <!-- Define a macro to create wheels fast -->
+    <xacro:macro name="noob_wheel" params="prefix parent *origin">
+        <link name="${prefix}_wheel">
+            <visual>
+                <origin xyz="0 0 0" rpy="${M_PI/2} 0 0"/>
+                <geometry>
+                    <cylinder length="${wheel_h}" radius="${wheel_r}"/>
+                </geometry>
+            </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="${M_PI/2} 0 0"/>
+                <geometry>
+                    <cylinder length="${wheel_h}" radius="${wheel_r}"/>
+                </geometry>
+            </collision>
+            <inertial>
+                <mass value="${wheel_m}"/>
+                <origin xyz="0 0 0"/>
+                <xacro:inertia_cyl m="${wheel_m}" r="${wheel_r}" h="${wheel_h}"/>
+            </inertial>
+        </link>
+            
+        <!-- Joint should have all these tags -->
+        <!-- Care the parent link, child link is usually the link with the same name -->
+        <joint name="${prefix}_wheel_joint" type="continuous">
+            <parent link="${parent}"/>
+            <child link="${prefix}_wheel"/>
+            <xacro:insert_block name="origin"/>
+            <axis xyz="0 1 0" rpy="0 0 0"/>
+            <limit effort="1000" velocity="1000"/>
+            <joint_properties damping="1.0" friction="1.0"/>
+        </joint>
+
+        <gazebo reference="${prefix}_wheel">
+            <mu1 value="1.0"/>
+            <mu2 value="1.0"/>
+            <kp value="1000000.0"/>
+            <kd value="1.0"/>
+            <maxVel value="1.0"/>
+            <minDepth value="0.00"/>
+            <material value="Gazebo/Black"/>
+        </gazebo>
+    </xacro:macro>
+
+    <!-- Generate box, either for sensor or camera-->
+    <xacro:macro name="box_gen" params="prefix use_stl *origin color colour box_size box_mass">
+        <link name="${prefix}">
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <xacro:if value="${use_stl}">
+                        <mesh filename="package://noob_bot/meshes/hokuyo.dae"/>
+                    </xacro:if>
+                    <xacro:unless value="${use_stl}">
+                        <box size="${box_size} ${box_size} ${box_size}"/>
+                    </xacro:unless>
+                </geometry>
+                <material name="colour">
+                    <color rgba="${colour}"/>
+                </material>
+            </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${box_size} ${box_size} ${box_size}"/>
+                </geometry>
+            </collision>
+            <inertial>
+                <mass value="${box_mass}"/>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <xacro:inertia_box m="${box_mass}" x="${box_size}" y="${box_size}" z="${box_size}"/>
+            </inertial>
+        </link>
+        <joint name="${prefix}_joint" type="fixed">
+            <parent link="base_link"/>
+            <child link="${prefix}"/>
+            <xacro:insert_block name="origin"/>
+            <axis xyz="0 1 0"/>
+        </joint>
+        <gazebo reference="${prefix}">
+            <material value="Gazebo/${color}"/>
+        </gazebo>
+    </xacro:macro>
+            
+    <!-- Use the macro defined and generate all the links -->
+    <xacro:noob_wheel prefix="front_right" parent="base_link">
+        <origin xyz="${wheel_offset_x} -${wheel_offset_y} ${wheel_offset_z}" rpy="0 0 0" />
+    </xacro:noob_wheel>
+
+    <xacro:noob_wheel prefix="front_left" parent="base_link">
+        <origin xyz="${wheel_offset_x} ${wheel_offset_y} ${wheel_offset_z}" rpy="0 0 0" />
+    </xacro:noob_wheel>
+
+    <xacro:noob_wheel prefix="back_right" parent="base_link">
+        <origin xyz="-${wheel_offset_x} -${wheel_offset_y} ${wheel_offset_z}" rpy="0 0 0" />
+    </xacro:noob_wheel>
+
+    <xacro:noob_wheel prefix="back_left" parent="base_link">
+        <origin xyz="-${wheel_offset_x} ${wheel_offset_y} ${wheel_offset_z}" rpy="0 0 0" />
+    </xacro:noob_wheel>
+
+    <xacro:box_gen prefix="camera" use_stl="false" color="Yellow" colour="1 1 0 1" box_size="0.05" box_mass="0.1">
+        <origin xyz="0.276 0 0" rpy="0 0 0"/>
+    </xacro:box_gen>
+
+    <xacro:box_gen prefix="hokuyo" use_stl="true" color="Green" colour="0 0.8 0 1" box_size="0.1" box_mass="1e-5">
+        <origin xyz="0.15 0 0.125" rpy="0 0 0"/>
+    </xacro:box_gen>
+
+</robot>
+
+
